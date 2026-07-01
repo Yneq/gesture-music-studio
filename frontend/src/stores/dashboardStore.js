@@ -31,7 +31,7 @@ const GUITAR_CHORDS = {
   C5: ['C4', 'E4', 'G4', 'C5'],
 }
 
-// ─── Salamander Grand Piano sample URLs (shared by user instrument + Canon) ──
+// ─── Salamander Grand Piano sample URLs ──────────────────────────────────────
 const SALAMANDER_URLS = {
   A0: 'A0.mp3', C1: 'C1.mp3', 'D#1': 'Ds1.mp3', 'F#1': 'Fs1.mp3',
   A1: 'A1.mp3', C2: 'C2.mp3', 'D#2': 'Ds2.mp3', 'F#2': 'Fs2.mp3',
@@ -44,144 +44,35 @@ const SALAMANDER_URLS = {
 }
 const SALAMANDER_BASE = 'https://tonejs.github.io/audio/salamander/'
 
-// ─── Pachelbel Canon in D — note sequence [noteName, durationMs] ─────────────
-// 72 BPM: quarter = 833ms, 8th = 417ms
-const _Q = 833
-const _E = 417
-const CANON_SEQUENCE = [
-  // Part 1 · Slow quarter notes · iconic opening (2 ground-bass cycles = 16 bars)
-  ['F#4',_Q],['E4',_Q],['D4',_Q],['C#4',_Q],
-  ['B3', _Q],['A3',_Q],['B3', _Q],['C#4',_Q],
-  ['D4', _Q],['C#4',_Q],['B3', _Q],['A3', _Q],
-  ['G3', _Q],['F#3',_Q],['G3', _Q],['A3', _Q],
-
-  ['F#4',_Q],['G4',_Q],['A4', _Q],['G4', _Q],
-  ['F#4',_Q],['E4',_Q],['D4', _Q],['E4', _Q],
-  ['F#4',_Q],['G4',_Q],['A4', _Q],['B4', _Q],
-  ['A4', _Q],['G4',_Q],['F#4',_Q],['E4', _Q],
-
-  // Part 2 · 8th-note runs (2 cycles)
-  ['D4',_E],['E4',_E],['F#4',_E],['G4',_E],  ['F#4',_E],['E4', _E],['D4',_E],['E4',_E],
-  ['F#4',_E],['E4',_E],['D4', _E],['C#4',_E], ['B3', _E],['C#4',_E],['D4',_E],['C#4',_E],
-  ['B3', _E],['A3',_E],['B3', _E],['C#4',_E], ['D4', _E],['C#4',_E],['B3',_E],['A3',_E],
-  ['G3', _E],['A3',_E],['B3', _E],['C#4',_E], ['D4', _E],['E4', _E],['F#4',_E],['G4',_E],
-
-  ['A4', _E],['G4',_E],['F#4',_E],['E4', _E], ['D4', _E],['C#4',_E],['B3',_E],['A3',_E],
-  ['B3', _E],['C#4',_E],['D4',_E],['E4', _E], ['F#4',_E],['G4', _E],['A4',_E],['G4',_E],
-  ['F#4',_E],['G4',_E],['A4',_E],['B4', _E],  ['C#5',_E],['D5', _E],['C#5',_E],['B4',_E],
-  ['A4', _E],['G4',_E],['F#4',_E],['E4', _E], ['D4', _E],['E4', _E],['F#4',_E],['G4',_E],
-
-  // Part 3 · Higher register runs (climax)
-  ['A4', _E],['B4', _E],['C#5',_E],['D5',_E], ['E5', _E],['D5', _E],['C#5',_E],['B4',_E],
-  ['A4', _E],['G4', _E],['F#4',_E],['G4',_E], ['A4', _E],['B4', _E],['A4', _E],['G4',_E],
-  ['F#4',_E],['G4', _E],['A4', _E],['G4',_E], ['F#4',_E],['E4', _E],['F#4',_E],['G4',_E],
-  ['A4', _E],['G4', _E],['F#4',_E],['E4',_E], ['D4', _E],['C#4',_E],['D4', _E],['E4',_E],
-
-  // Part 4 · Resolution (quarter notes back, serene ending)
-  ['F#4',_Q],['E4', _Q],['D4', _Q],['C#4',_Q],
-  ['B3', _Q],['A3', _Q],['B3', _Q],['C#4',_Q],
-  ['D4', _Q],['F#4',_Q],['A4', _Q],['D5', _Q],
-  ['D4', _Q*4],  // final long note
-]
-
-// ─── User instrument audio state ──────────────────────────────────────────────
-// masterGain is created once on enableAudio and lives for the whole session.
-// Switching instruments sets gain=0 (instant silence), disposes old nodes,
-// builds new nodes, then restores gain=1.
+// ─── Multi-instrument audio state ────────────────────────────────────────────
+// Each instrument is built lazily on first use and kept alive for the session.
+// Incoming events are routed by event.instrument — not the local selection.
+// This means remote users are heard through their own chosen instrument.
 let masterGain = null
-let instrumentNodes = []
-let synth = null
-let guitarStrings = []
-let drumKit = null
-let currentInstrument = 'piano'
-let sustainedNote = null
-let releaseTimer = null
+const instruments = {}   // { piano: {...}, guitar: {...}, synth: {...}, drum: {...} }
 
-// ─── Canon piano audio state (independent from user instrument) ───────────────
-// canonGain / canonSampler are NEVER touched by setInstrument —
-// switching guitar/synth/drum does not affect Canon playback.
-let canonGain = null
-let canonSampler = null
-let canonTimers = []
-
-function disposeCurrentInstrument() {
-  clearTimeout(releaseTimer)
-  releaseTimer = null
-  try {
-    if (synth) {
-      if (typeof synth.releaseAll === 'function') synth.releaseAll()
-      else synth.triggerRelease?.()
-    }
-  } catch { /* ignore */ }
-  sustainedNote = null
-  instrumentNodes.forEach(n => { try { n.dispose() } catch { /* ignore */ } })
-  instrumentNodes = []
-  synth = null
-  guitarStrings = []
-  drumKit = null
+function disposeAllInstruments() {
+  for (const inst of Object.values(instruments)) {
+    if (inst?.releaseTimer) clearTimeout(inst.releaseTimer)
+    inst?.nodes?.forEach(n => { try { n.dispose() } catch { /* ignore */ } })
+  }
+  for (const k of Object.keys(instruments)) delete instruments[k]
 }
 
-function playNote(note) {
-  if (!masterGain) return
-
-  if (currentInstrument === 'drum') {
-    const trigger = drumKit?.triggers[note] ?? drumKit?.triggers['C4']
-    trigger?.()
-    return
-  }
-
-  if (currentInstrument === 'guitar') {
-    const chordNotes = GUITAR_CHORDS[note] ?? [note]
-    chordNotes.forEach((n, i) => {
-      try {
-        guitarStrings[i % guitarStrings.length]
-          ?.triggerAttackRelease(n, 3, `+${i * 0.028}`)
-      } catch { /* ignore */ }
-    })
-    return
-  }
-
-  // Piano / Synth — legato sustain, 3 s auto-release
-  clearTimeout(releaseTimer)
-  if (sustainedNote && synth) {
-    try {
-      currentInstrument === 'piano'
-        ? synth.triggerRelease(sustainedNote)
-        : synth.triggerRelease()
-    } catch { /* ignore */ }
-  }
-  sustainedNote = note
-  try { synth?.triggerAttack(note) } catch { /* ignore */ }
-  releaseTimer = setTimeout(() => {
-    if (!synth || !sustainedNote) { sustainedNote = null; return }
-    try {
-      currentInstrument === 'piano'
-        ? synth.triggerRelease(sustainedNote)
-        : synth.triggerRelease()
-    } catch { /* ignore */ }
-    sustainedNote = null
-  }, 3000)
-}
-
-async function buildSynth(Tone, instrument) {
-  if (!masterGain) {
-    masterGain = new Tone.Gain(1).toDestination()
-  }
-  masterGain.gain.value = 0
-  currentInstrument = instrument
-  disposeCurrentInstrument()
+async function ensureInstrument(Tone, instrument) {
+  if (!masterGain) masterGain = new Tone.Gain(1).toDestination()
+  if (instruments[instrument]) return
 
   switch (instrument) {
     case 'guitar': {
       const reverb = new Tone.Reverb({ decay: 2.8, wet: 0.32 }).connect(masterGain)
-      instrumentNodes.push(reverb)
-      guitarStrings = Array.from({ length: 6 }, () => {
+      const strings = Array.from({ length: 6 }, () => {
         const s = new Tone.PluckSynth({ attackNoise: 1.5, dampening: 3200, resonance: 0.988 })
           .connect(reverb)
         s.volume.value = -4
-        instrumentNodes.push(s)
         return s
       })
+      instruments.guitar = { strings, nodes: [reverb, ...strings] }
       break
     }
     case 'synth': {
@@ -189,15 +80,15 @@ async function buildSynth(Tone, instrument) {
       const chorus = new Tone.Chorus({ frequency: 3, delayTime: 3.5, depth: 0.7 }).connect(reverb)
       chorus.wet.value = 0.5
       chorus.start()
-      synth = new Tone.FMSynth({
+      const fm = new Tone.FMSynth({
         harmonicity: 3, modulationIndex: 12,
         oscillator: { type: 'sine' },
         envelope: { attack: 0.08, decay: 0.3, sustain: 0.85, release: 2.5 },
         modulation: { type: 'triangle' },
         modulationEnvelope: { attack: 0.4, decay: 0.01, sustain: 1, release: 0.5 },
       }).connect(chorus)
-      synth.volume.value = -6
-      instrumentNodes.push(reverb, chorus, synth)
+      fm.volume.value = -6
+      instruments.synth = { fm, sustain: null, releaseTimer: null, nodes: [reverb, chorus, fm] }
       break
     }
     case 'drum': {
@@ -247,11 +138,7 @@ async function buildSynth(Tone, instrument) {
         envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.04 },
       }).connect(clapBP)
       clap.volume.value = -6
-      instrumentNodes.push(
-        room, kick, snareHP, snare, hihatHP, hihat,
-        openHP, openHihat, tomH, tomL, crashHP, crash, clapBP, clap,
-      )
-      drumKit = {
+      instruments.drum = {
         triggers: {
           C4: () => kick.triggerAttackRelease('C1', '8n'),
           D4: () => snare.triggerAttackRelease('8n'),
@@ -262,33 +149,78 @@ async function buildSynth(Tone, instrument) {
           B4: () => crash.triggerAttackRelease('4n'),
           C5: () => clap.triggerAttackRelease('16n'),
         },
+        nodes: [
+          room, kick, snareHP, snare, hihatHP, hihat,
+          openHP, openHihat, tomH, tomL, crashHP, crash, clapBP, clap,
+        ],
       }
       break
     }
     default: { // piano
       const reverb = new Tone.Reverb({ decay: 1.8, wet: 0.18 }).connect(masterGain)
-      synth = new Tone.Sampler({
+      const sampler = new Tone.Sampler({
         urls: SALAMANDER_URLS, release: 1,
         baseUrl: SALAMANDER_BASE,
       }).connect(reverb)
-      synth.volume.value = -6
-      instrumentNodes.push(reverb, synth)
+      sampler.volume.value = -6
+      instruments.piano = { sampler, sustain: null, releaseTimer: null, nodes: [reverb, sampler] }
     }
   }
-
-  masterGain.gain.value = 1
 }
 
-// ─── Canon piano (built once, lives for the session) ─────────────────────────
-async function ensureCanonPiano(Tone) {
-  if (canonSampler) return
-  canonGain = new Tone.Gain(0.85).toDestination()
-  const reverb = new Tone.Reverb({ decay: 2.2, wet: 0.2 }).connect(canonGain)
-  canonSampler = new Tone.Sampler({
-    urls: SALAMANDER_URLS, release: 1.5,
-    baseUrl: SALAMANDER_BASE,
-  }).connect(reverb)
+function playNoteForInstrument(note, instrument) {
+  if (!masterGain) return
+
+  switch (instrument) {
+    case 'drum': {
+      const trigger = instruments.drum?.triggers[note] ?? instruments.drum?.triggers['C4']
+      trigger?.()
+      break
+    }
+    case 'guitar': {
+      const { strings } = instruments.guitar ?? {}
+      if (!strings) break
+      const chordNotes = GUITAR_CHORDS[note] ?? [note]
+      chordNotes.forEach((n, i) => {
+        try { strings[i % strings.length]?.triggerAttackRelease(n, 3, `+${i * 0.028}`) } catch { /* ignore */ }
+      })
+      break
+    }
+    case 'synth': {
+      const inst = instruments.synth
+      if (!inst) break
+      clearTimeout(inst.releaseTimer)
+      if (inst.sustain) try { inst.fm.triggerRelease() } catch { /* ignore */ }
+      inst.sustain = note
+      try { inst.fm.triggerAttack(note) } catch { /* ignore */ }
+      inst.releaseTimer = setTimeout(() => {
+        if (!inst.sustain) return
+        try { inst.fm.triggerRelease() } catch { /* ignore */ }
+        inst.sustain = null
+      }, 3000)
+      break
+    }
+    default: { // piano
+      const inst = instruments.piano
+      if (!inst) break
+      clearTimeout(inst.releaseTimer)
+      if (inst.sustain) try { inst.sampler.triggerRelease(inst.sustain) } catch { /* ignore */ }
+      inst.sustain = note
+      try { inst.sampler.triggerAttack(note) } catch { /* ignore */ }
+      inst.releaseTimer = setTimeout(() => {
+        if (!inst.sustain) return
+        try { inst.sampler.triggerRelease(inst.sustain) } catch { /* ignore */ }
+        inst.sustain = null
+      }, 3000)
+    }
+  }
 }
+
+// ─── Canon audio state (independent from instrument routing above) ────────────
+// HTML5 Audio + Web Audio GainNode allows volume > 1.0.
+let canonAudio = null
+let canonAudioCtx = null
+let canonGainNode = null
 
 // ─── Vite HMR cleanup ────────────────────────────────────────────────────────
 if (import.meta.hot) {
@@ -299,13 +231,10 @@ if (import.meta.hot) {
       try { masterGain.dispose() } catch { /* ignore */ }
       masterGain = null
     }
-    instrumentNodes.forEach(n => { try { n.dispose() } catch { /* ignore */ } })
-    instrumentNodes = []
-    synth = null; guitarStrings = []; drumKit = null
-    if (canonGain) { try { canonGain.dispose() } catch { /* ignore */ } canonGain = null }
-    if (canonSampler) { try { canonSampler.dispose() } catch { /* ignore */ } canonSampler = null }
-    canonTimers.forEach(t => clearTimeout(t)); canonTimers = []
-    clearTimeout(releaseTimer); releaseTimer = null
+    disposeAllInstruments()
+    if (canonAudio) { canonAudio.pause(); canonAudio = null }
+    if (canonAudioCtx) { try { canonAudioCtx.close() } catch { /* ignore */ } ; canonAudioCtx = null }
+    canonGainNode = null
   })
 }
 
@@ -344,52 +273,48 @@ export const useDashboardStore = defineStore('dashboard', {
     async enableAudio() {
       const Tone = await import('tone')
       await Tone.start()
-      await buildSynth(Tone, this.selectedInstrument)
+      await ensureInstrument(Tone, this.selectedInstrument)
       this.audioEnabled = true
     },
 
     async setInstrument(instrument) {
       this.selectedInstrument = instrument
+      // Pre-build the instrument so the first note plays without latency.
+      // All other instruments stay alive — remote users still heard correctly.
       if (this.audioEnabled) {
-        if (masterGain) masterGain.gain.value = 0
-        currentInstrument = instrument
         const Tone = await import('tone')
-        await buildSynth(Tone, instrument)
-        // Canon is unaffected — canonSampler / canonGain not touched here
+        await ensureInstrument(Tone, instrument)
       }
     },
 
     async playCanon() {
-      if (!this.audioEnabled) await this.enableAudio()
       this.stopCanon()
-
-      const Tone = await import('tone')
-      await ensureCanonPiano(Tone)
-
-      this.canonPlaying = true
-      let offsetMs = 0
-
-      CANON_SEQUENCE.forEach(([note, durationMs], i) => {
-        const playAt = offsetMs
-        const t = setTimeout(() => {
-          if (!this.canonPlaying) return
-          try {
-            // duration passed to triggerAttackRelease in seconds, 90% of beat for legato gap
-            canonSampler.triggerAttackRelease(note, durationMs * 0.9 / 1000)
-          } catch { /* ignore */ }
-          if (i === CANON_SEQUENCE.length - 1) {
-            // Mark finished after the last note fades
-            setTimeout(() => { this.canonPlaying = false }, durationMs * 1.5)
-          }
-        }, playAt)
-        canonTimers.push(t)
-        offsetMs += durationMs
-      })
+      if (!canonAudio) {
+        canonAudio = new Audio('/audio/canon.mp3')
+        canonAudioCtx = new AudioContext()
+        const source = canonAudioCtx.createMediaElementSource(canonAudio)
+        canonGainNode = canonAudioCtx.createGain()
+        canonGainNode.gain.value = 1.5
+        source.connect(canonGainNode)
+        canonGainNode.connect(canonAudioCtx.destination)
+      }
+      canonAudio.currentTime = 150
+      canonAudio.onended = () => { this.canonPlaying = false }
+      try {
+        if (canonAudioCtx.state === 'suspended') await canonAudioCtx.resume()
+        await canonAudio.play()
+        this.canonPlaying = true
+      } catch {
+        this.canonPlaying = false
+      }
     },
 
     stopCanon() {
-      canonTimers.forEach(t => clearTimeout(t))
-      canonTimers = []
+      if (canonAudio) {
+        canonAudio.pause()
+        canonAudio.currentTime = 150
+        canonAudio.onended = null
+      }
       this.canonPlaying = false
     },
 
@@ -403,18 +328,25 @@ export const useDashboardStore = defineStore('dashboard', {
     _handleNoteEvent(event) {
       this.currentNote = event.note
       this.currentUsername = event.username
-      const isDrum = currentInstrument === 'drum'
+      const eventInstrument = event.instrument ?? 'piano'
+      const isDrum = eventInstrument === 'drum'
       this.recentNotes.unshift({
         id: event.id ?? Date.now(),
         username: event.username,
         note: isDrum ? (DRUM_LABELS[event.note] ?? event.note) : event.note,
-        instrument: this.selectedInstrument,
+        instrument: eventInstrument,
         volume: event.volume,
         time: new Date(event.createdAt ?? Date.now()).toLocaleTimeString(),
         color: userColor(event.username),
       })
       if (this.recentNotes.length > 20) this.recentNotes.pop()
-      if (this.audioEnabled) playNote(event.note)
+      if (this.audioEnabled) {
+        import('tone').then(Tone =>
+          ensureInstrument(Tone, eventInstrument).then(() =>
+            playNoteForInstrument(event.note, eventInstrument)
+          )
+        )
+      }
     },
   },
 })
