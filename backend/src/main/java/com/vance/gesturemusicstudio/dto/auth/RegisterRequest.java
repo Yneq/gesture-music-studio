@@ -18,7 +18,7 @@ public class RegisterRequest {
     @Size(min = 6, max = 100)
     private String password;
 
-    @Email
+    @Email(message = "Email 格式不正確")
     @Size(max = 100)
-    private String email;
+    private String email;   // optional — null or valid address only, never empty string
 }

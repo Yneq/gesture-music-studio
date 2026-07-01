@@ -9,12 +9,13 @@ Usage:
 """
 
 import argparse
+import os
 import time
 import random
 import sys
 import requests
 
-BASE_URL = "http://localhost:8080/api"
+BASE_URL = os.environ.get("MUSIC_SERVER", "http://localhost:8080") + "/api"
 NOTES = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]
 
 # Simple melodic patterns to cycle through

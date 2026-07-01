@@ -8,4 +8,6 @@ public interface UserService {
     User register(RegisterRequest request);
 
     User getById(Long id);
+
+    boolean existsByUsername(String username);
 }

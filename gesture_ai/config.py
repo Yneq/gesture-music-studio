@@ -5,9 +5,10 @@
 
 import os
 
-# Spring Boot 後端位置
-BACKEND_HTTP_BASE_URL = "http://localhost:8080/api"
-BACKEND_WS_URL = "ws://localhost:8080/ws"
+# Spring Boot 後端位置（MUSIC_SERVER 讓同學指向老師的 IP）
+_SERVER = os.environ.get("MUSIC_SERVER", "http://localhost:8080")
+BACKEND_HTTP_BASE_URL = _SERVER.rstrip("/") + "/api"
+BACKEND_WS_URL = _SERVER.rstrip("/").replace("http://", "ws://").replace("https://", "wss://") + "/ws"
 
 # AI Service 登入帳密（讀環境變數，沒設就用空字串讓 sender 以無認證模式跳過送資料）
 AI_SERVICE_USERNAME = os.environ.get("AI_SERVICE_USERNAME", "")

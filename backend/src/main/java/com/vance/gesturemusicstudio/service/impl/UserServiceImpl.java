@@ -44,4 +44,9 @@ public class UserServiceImpl implements UserService {
         return userDao.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "找不到使用者"));
     }
+
+    @Override
+    public boolean existsByUsername(String username) {
+        return userDao.existsByUsername(username);
+    }
 }
