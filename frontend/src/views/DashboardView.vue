@@ -221,7 +221,7 @@ const GESTURE_EMOJI = {
           <div class="border-t border-slate-700 pt-3 space-y-1 text-xs text-slate-500 shrink-0">
             <div>✊ FIST + 左右揮 → 換樂器</div>
             <div>👍 THUMB_UP ・ ✌️ PEACE ・ 🖐 OPEN_HAND → 指令</div>
-            <div>👆 POINT + 音區 → 音符 ・ 🖐 OPEN + 拇食指 → 音量</div>
+            <div>👆 POINT + 音區 → 音符 ・ 🖐 OPEN + 轉腕 → 音量</div>
           </div>
         </div>
 

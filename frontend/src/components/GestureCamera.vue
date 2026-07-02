@@ -159,22 +159,9 @@ function drawOverlay(landmarks) {
   }
 }
 
-// Draw thumb-index pinch line + volume bar
-function drawPinchFeedback(ctx, lm, W, H, vol) {
-  const tx = (1 - lm[4].x) * W, ty = lm[4].y * H
-  const ix = (1 - lm[8].x) * W, iy = lm[8].y * H
+// Volume bar + rotation dial indicator
+function drawVolumeFeedback(ctx, lm, W, H, vol, angleDeg) {
   const hue = vol * 110   // 0 = red, 110 ≈ green
-
-  // Dashed line between thumb and index
-  ctx.save()
-  ctx.beginPath()
-  ctx.moveTo(tx, ty)
-  ctx.lineTo(ix, iy)
-  ctx.strokeStyle = `hsl(${hue},100%,60%)`
-  ctx.lineWidth = 3
-  ctx.setLineDash([5, 3])
-  ctx.stroke()
-  ctx.restore()
 
   // Volume bar on right edge
   const bW = 7, bH = H * 0.55, bX = W - bW - 8, bY = (H - bH) / 2
@@ -193,6 +180,37 @@ function drawPinchFeedback(ctx, lm, W, H, vol) {
   ctx.shadowColor = 'rgba(0,0,0,0.8)'
   ctx.shadowBlur = 3
   ctx.fillText(`${Math.round(vol * 100)}%`, bX - 4, bY + bH / 2)
+  ctx.shadowBlur = 0
+
+  // Rotation dial: small semicircle arc + pointer in top-left
+  const cx = 36, cy = 36, r = 24
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, -Math.PI * 0.75, Math.PI * 0.75)
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'
+  ctx.lineWidth = 5
+  ctx.lineCap = 'round'
+  ctx.stroke()
+  // Filled arc proportional to volume
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, -Math.PI * 0.75, -Math.PI * 0.75 + vol * Math.PI * 1.5)
+  ctx.strokeStyle = `hsl(${hue},100%,60%)`
+  ctx.lineWidth = 5
+  ctx.stroke()
+  // Pointer needle
+  const needleAngle = -Math.PI * 0.75 + vol * Math.PI * 1.5
+  ctx.beginPath()
+  ctx.moveTo(cx, cy)
+  ctx.lineTo(cx + Math.cos(needleAngle) * r * 0.75, cy + Math.sin(needleAngle) * r * 0.75)
+  ctx.strokeStyle = 'white'
+  ctx.lineWidth = 2
+  ctx.stroke()
+  // Dial label
+  ctx.font = `bold ${Math.round(Math.min(W,H)*0.032)}px monospace`
+  ctx.fillStyle = 'white'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.shadowBlur = 3
+  ctx.fillText(`${Math.round(vol * 100)}%`, cx, cy + r + 12)
   ctx.shadowBlur = 0
 }
 
@@ -272,15 +290,18 @@ function detectLoop() {
         const ctx = canvasRef.value?.getContext('2d')
         const W = canvasRef.value?.width, H = canvasRef.value?.height
 
-        // ── 1. Pinch volume: only active when Open_Palm ───────────────────────
+        // ── 1. Rotation volume: Open_Palm + wrist tilt controls volume ────────
+        // wrist (0) → middle finger base (9), mirrored to match display
+        // clockwise = louder, counter-clockwise = quieter  (±70° maps to 0–1)
         if (gesture === 'Open_Palm') {
-          const pdx = lm[4].x - lm[8].x, pdy = lm[4].y - lm[8].y
-          const pinchDist = Math.sqrt(pdx * pdx + pdy * pdy)
-          // 0.03 (fully closed) → 0 vol,  0.30 (wide open) → 1.0 vol
-          const targetVol = Math.min(1.0, Math.max(0, (pinchDist - 0.03) / 0.27))
+          const canvasDx = (1 - lm[9].x) - (1 - lm[0].x)   // mirrored x delta
+          const dy = lm[9].y - lm[0].y
+          const angle = Math.atan2(canvasDx, -dy)             // 0 = up, + = CW
+          const DEG70 = 70 * Math.PI / 180
+          const targetVol = Math.min(1, Math.max(0, (angle + DEG70) / (2 * DEG70)))
           smoothedVol = smoothedVol * (1 - VOL_ALPHA) + targetVol * VOL_ALPHA
           dashboard.setGestureVolume(smoothedVol)
-          if (ctx && W && H) drawPinchFeedback(ctx, lm, W, H, smoothedVol)
+          if (ctx && W && H) drawVolumeFeedback(ctx, lm, W, H, smoothedVol, angle * 180 / Math.PI)
         }
 
         // ── 2. Swipe (Closed_Fist) → cycle instrument ─────────────────────────
