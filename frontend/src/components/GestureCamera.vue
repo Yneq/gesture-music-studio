@@ -13,6 +13,7 @@ const status = ref('idle')   // idle | starting | running | error
 const errorMsg = ref('')
 const needsHttps = ref(false)
 const detectedNote = ref(null)
+const swipeHint = ref(null)   // e.g. '→ 🎸 Acoustic'
 const siteOrigin = location.origin
 
 watch(status, v => emit('status', v))
@@ -22,16 +23,28 @@ const INNER = 0.12
 const OUTER = 0.38
 const DEBOUNCE_MS = 500
 
+const INST_LABELS = { piano: '🎹 Piano', guitar: '🎸 Acoustic', synth: '🎛️ Synth', drum: '🥁 Drum' }
+
 let recognizer = null
 let mediaStream = null
 let rafId = null
 let lastNoteAt = 0
 
+// Swipe detection state
+let wristBuffer = []      // normalized canvas-X (mirrored), last N frames
+let lastSwipeAt = 0
+const WRIST_BUF = 8
+const SWIPE_DELTA = 0.13  // 13% of frame width needed
+const SWIPE_COOLDOWN = 1200
+
+// Volume smoothing
+let smoothedVol = 1.0
+const VOL_ALPHA = 0.12   // exponential moving average weight
+
 // ─── Note zone helpers ────────────────────────────────────────────────────────
 
 function noteAtPosition(rawX, rawY) {
-  // rawX from camera landmark (mirrored: 1-x)
-  const x = 1 - rawX
+  const x = 1 - rawX   // mirror to match display
   const dx = x - 0.5, dy = rawY - 0.5
   const dist = Math.sqrt(dx * dx + dy * dy)
   if (dist < INNER || dist > OUTER) return null
@@ -41,7 +54,6 @@ function noteAtPosition(rawX, rawY) {
 }
 
 function noteAtCanvasPos(e) {
-  // For mouse: normalized coords, no mirror — matches what user sees
   const canvas = canvasRef.value
   if (!canvas) return null
   const rect = canvas.getBoundingClientRect()
@@ -78,7 +90,6 @@ function drawRing(ctx, W, H, highlightNote = null) {
     ctx.lineWidth = 1
     ctx.stroke()
   }
-
   for (const r of [ri, ro]) {
     ctx.beginPath()
     ctx.arc(cx, cy, r, 0, Math.PI * 2)
@@ -86,7 +97,6 @@ function drawRing(ctx, W, H, highlightNote = null) {
     ctx.lineWidth = 2
     ctx.stroke()
   }
-
   const labelR = (INNER + OUTER) / 2 * minDim
   ctx.font = `bold ${Math.round(minDim * 0.055)}px monospace`
   ctx.textAlign = 'center'
@@ -111,7 +121,6 @@ function drawOverlay(landmarks) {
   canvas.height = H
   const ctx = canvas.getContext('2d')
   ctx.clearRect(0, 0, W, H)
-
   drawRing(ctx, W, H, null)
 
   if (landmarks) {
@@ -150,6 +159,43 @@ function drawOverlay(landmarks) {
   }
 }
 
+// Draw thumb-index pinch line + volume bar
+function drawPinchFeedback(ctx, lm, W, H, vol) {
+  const tx = (1 - lm[4].x) * W, ty = lm[4].y * H
+  const ix = (1 - lm[8].x) * W, iy = lm[8].y * H
+  const hue = vol * 110   // 0 = red, 110 ≈ green
+
+  // Dashed line between thumb and index
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(tx, ty)
+  ctx.lineTo(ix, iy)
+  ctx.strokeStyle = `hsl(${hue},100%,60%)`
+  ctx.lineWidth = 3
+  ctx.setLineDash([5, 3])
+  ctx.stroke()
+  ctx.restore()
+
+  // Volume bar on right edge
+  const bW = 7, bH = H * 0.55, bX = W - bW - 8, bY = (H - bH) / 2
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'
+  ctx.fillRect(bX, bY, bW, bH)
+  ctx.fillStyle = `hsl(${hue},100%,55%)`
+  const fillH = bH * vol
+  ctx.fillRect(bX, bY + bH - fillH, bW, fillH)
+
+  // Percentage label
+  const fs = Math.round(Math.min(W, H) * 0.042)
+  ctx.font = `bold ${fs}px monospace`
+  ctx.fillStyle = 'white'
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'middle'
+  ctx.shadowColor = 'rgba(0,0,0,0.8)'
+  ctx.shadowBlur = 3
+  ctx.fillText(`${Math.round(vol * 100)}%`, bX - 4, bY + bH / 2)
+  ctx.shadowBlur = 0
+}
+
 function drawIdleRing(highlightNote = null) {
   const canvas = canvasRef.value
   if (!canvas) return
@@ -162,7 +208,6 @@ function drawIdleRing(highlightNote = null) {
   ctx.clearRect(0, 0, W, H)
   drawRing(ctx, W, H, highlightNote)
 
-  // Center hint
   const minDim = Math.min(W, H)
   ctx.fillStyle = 'rgba(255,255,255,0.25)'
   ctx.font = `${Math.round(minDim * 0.038)}px sans-serif`
@@ -217,11 +262,51 @@ function detectLoop() {
     if (video.readyState >= 2) {
       const now = Date.now()
       const result = recognizer.recognizeForVideo(video, now)
+
       if (result.gestures.length > 0 && result.landmarks.length > 0) {
         const top = result.gestures[0][0]
         const lm  = result.landmarks[0]
+        const gesture = top.categoryName
+
         drawOverlay(lm)
-        if (top.categoryName === 'Pointing_Up' && top.score >= 0.7 && now - lastNoteAt > DEBOUNCE_MS) {
+        const ctx = canvasRef.value?.getContext('2d')
+        const W = canvasRef.value?.width, H = canvasRef.value?.height
+
+        // ── 1. Pinch volume: thumb (4) ↔ index tip (8) distance ──────────────
+        const pdx = lm[4].x - lm[8].x, pdy = lm[4].y - lm[8].y
+        const pinchDist = Math.sqrt(pdx * pdx + pdy * pdy)
+        // 0.03 (fully closed) → 0 vol,  0.30 (wide open) → 1.0 vol
+        const targetVol = Math.min(1.0, Math.max(0, (pinchDist - 0.03) / 0.27))
+        smoothedVol = smoothedVol * (1 - VOL_ALPHA) + targetVol * VOL_ALPHA
+        dashboard.setGestureVolume(smoothedVol)
+        if (ctx && W && H) drawPinchFeedback(ctx, lm, W, H, smoothedVol)
+
+        // ── 2. Swipe (Closed_Fist) → cycle instrument ─────────────────────────
+        if (gesture === 'Closed_Fist') {
+          // Track canvas-X (mirrored): right on screen = higher value
+          const canvasX = 1 - lm[0].x
+          wristBuffer.push(canvasX)
+          if (wristBuffer.length > WRIST_BUF) wristBuffer.shift()
+
+          if (wristBuffer.length === WRIST_BUF && now - lastSwipeAt > SWIPE_COOLDOWN) {
+            const delta = wristBuffer[WRIST_BUF - 1] - wristBuffer[0]
+            if (Math.abs(delta) > SWIPE_DELTA) {
+              lastSwipeAt = now
+              wristBuffer = []
+              // delta > 0 = moved right on screen → next (+1)
+              // delta < 0 = moved left on screen  → prev (-1)
+              const dir = delta > 0 ? 1 : -1
+              const next = dashboard.cycleInstrument(dir)
+              swipeHint.value = `${dir > 0 ? '→' : '←'} ${INST_LABELS[next] ?? next}`
+              setTimeout(() => { swipeHint.value = null }, 900)
+            }
+          }
+        } else {
+          wristBuffer = []
+        }
+
+        // ── 3. Note detection (Pointing_Up) ───────────────────────────────────
+        if (gesture === 'Pointing_Up' && top.score >= 0.7 && now - lastNoteAt > DEBOUNCE_MS) {
           const note = noteAtPosition(lm[8].x, lm[8].y)
           if (note) {
             lastNoteAt = now
@@ -234,6 +319,7 @@ function detectLoop() {
         }
       } else {
         drawOverlay(null)
+        wristBuffer = []
       }
     }
     rafId = requestAnimationFrame(frame)
@@ -303,19 +389,15 @@ function stop() {
 }
 
 onMounted(() => nextTick(() => drawIdleRing()))
-
-// Redraw idle ring whenever camera is not running
 watch(status, v => { if (v !== 'running') nextTick(() => drawIdleRing()) })
-
 onUnmounted(stop)
 defineExpose({ start, stop, status })
 </script>
 
 <template>
-  <!-- Inline camera panel — parent controls size via class -->
   <div class="relative bg-slate-900 rounded-xl overflow-hidden w-full h-full">
 
-    <!-- Video feed (CSS-mirrored, behind canvas) -->
+    <!-- Video feed (CSS-mirrored) -->
     <video ref="videoRef"
       v-show="status === 'running'"
       class="absolute inset-0 w-full h-full object-cover"
@@ -337,19 +419,25 @@ defineExpose({ start, stop, status })
       {{ detectedNote }}
     </div>
 
-    <!-- Status overlays (idle / starting / error) — pointer-events-none so canvas stays clickable -->
+    <!-- Swipe / instrument change hint -->
+    <div v-if="swipeHint"
+      class="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-black/75 text-amber-300 font-bold text-base px-4 py-1.5 rounded-lg pointer-events-none">
+      {{ swipeHint }}
+    </div>
+
+    <!-- Status overlays (pointer-events-none so canvas stays clickable) -->
     <div v-if="status !== 'running'"
       class="absolute inset-0 flex flex-col items-center justify-end gap-3 pb-4 pointer-events-none">
 
       <template v-if="status === 'starting'">
-        <div class="w-8 h-8 border-2 border-slate-600 border-t-emerald-400 rounded-full animate-spin pointer-events-none"></div>
-        <p class="text-slate-400 text-xs text-center pointer-events-none">載入 AI 模型中<br>（首次約 10 秒）</p>
+        <div class="w-8 h-8 border-2 border-slate-600 border-t-emerald-400 rounded-full animate-spin"></div>
+        <p class="text-slate-400 text-xs text-center">載入 AI 模型中<br>（首次約 10 秒）</p>
       </template>
 
       <template v-else-if="status === 'error'">
-        <p class="text-red-400 text-xs text-center pointer-events-none">⚠️ {{ errorMsg }}</p>
+        <p class="text-red-400 text-xs text-center">⚠️ {{ errorMsg }}</p>
         <div v-if="needsHttps"
-          class="bg-slate-800/90 rounded-lg p-3 text-[11px] text-slate-300 space-y-1.5 mx-3 pointer-events-none">
+          class="bg-slate-800/90 rounded-lg p-3 text-[11px] text-slate-300 space-y-1.5 mx-3">
           <p class="text-amber-400 font-semibold text-xs">Chrome 設定（一次）：</p>
           <p class="break-all text-amber-300 select-all">chrome://flags/#unsafely-treat-insecure-origin-as-secure</p>
           <p>加入 <span class="text-emerald-300 select-all">{{ siteOrigin }}</span> → Enable → 重啟</p>

@@ -74,7 +74,7 @@ const INSTRUMENTS = [
 
 const GESTURE_EMOJI = {
   OPEN_HAND: '🖐', FIST: '✊', THUMB_UP: '👍',
-  OK: '👌', PEACE: '✌️', POINT: '👆',
+  PEACE: '✌️', POINT: '👆',
 }
 </script>
 
@@ -219,9 +219,9 @@ const GESTURE_EMOJI = {
               class="text-slate-600 text-sm text-center py-8">尚無紀錄</p>
           </div>
           <div class="border-t border-slate-700 pt-3 space-y-1 text-xs text-slate-500 shrink-0">
-            <div>✊ FIST ・ 👍 THUMB_UP ・ 👌 OK</div>
-            <div>✌️ PEACE ・ 🖐 OPEN_HAND → 送指令</div>
-            <div>👆 POINT + 音區 → 觸發音符</div>
+            <div>✊ FIST + 左右揮 → 換樂器</div>
+            <div>👍 THUMB_UP ・ ✌️ PEACE ・ 🖐 OPEN_HAND → 指令</div>
+            <div>👆 POINT + 音區 → 音符 ・ 拇食指距離 → 音量</div>
           </div>
         </div>
 

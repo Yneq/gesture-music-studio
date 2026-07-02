@@ -250,6 +250,7 @@ export const useDashboardStore = defineStore('dashboard', {
     recentNotes: [],
     recentGestures: [],
     canonPlaying: false,
+    gestureVolume: 1.0,
   }),
 
   getters: {
@@ -285,6 +286,19 @@ export const useDashboardStore = defineStore('dashboard', {
         const Tone = await import('tone')
         await ensureInstrument(Tone, instrument)
       }
+    },
+
+    setGestureVolume(vol) {
+      if (masterGain) masterGain.gain.value = vol
+      this.gestureVolume = vol
+    },
+
+    cycleInstrument(dir) {
+      const ORDER = ['piano', 'guitar', 'synth', 'drum']
+      const idx = ORDER.indexOf(this.selectedInstrument)
+      const next = ORDER[(idx + dir + ORDER.length) % ORDER.length]
+      this.setInstrument(next)
+      return next
     },
 
     async playCanon() {
