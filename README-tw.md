@@ -9,8 +9,9 @@
 ---
 
 <p align="center">
-  <img src="./docs/images/screenshot-login.png" width="480">
-  <img src="./docs/images/screenshot-dashboard.png" width="480">
+  <img src="./docs/images/screenshot-login.png" width="320">
+  <img src="./docs/images/screenshot-dashboard.png" width="320">
+  <img src="./docs/images/screenshot-stats.png" width="220">
 </p>
 
 <p align="center">
@@ -31,12 +32,6 @@
 - **背景音樂**：Dashboard 自動播放 jazz 背景音，可一鍵切換
 
 ---
-
-## 截圖
-
-<p align="center">
-  <img src="./docs/images/screenshot-stats.png" width="340">
-</p>
 
 ---
 
@@ -185,7 +180,7 @@ Publish:   /app/presence/leave
 
 ## Known Limitations
 
-- **WebSocket 未驗證**：`/ws` endpoint 目前 `permitAll`，任何人不需登入即可連上 STOMP。REST API 有 JWT 保護，WebSocket 的 `ChannelInterceptor` token 驗證尚未實作。
+- WebSocket 驗證已透過 `JwtChannelInterceptor` 實作，前端在 STOMP `CONNECT` frame header 帶上 JWT，後端攔截驗證後才允許建立連線。
 
 ---
 
