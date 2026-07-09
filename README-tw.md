@@ -17,7 +17,7 @@
 | 🎭 測試帳號 | `guest` / `guest123`（或自行註冊） |
 | ⏱️ 首次載入 | 部署於 Render 免費方案，閒置時伺服器會休眠，**首次進入可能需要約 1 分鐘喚醒**，之後載入正常。 |
 | 📷 攝影機 | 點擊「手勢」啟動攝影機並允許存取，手勢辨識完全在瀏覽器本機執行（WebAssembly），影像不會離開裝置。 |
-| 🌐 瀏覽器 | 建議使用 Chrome 或 Edge，桌機 + 網路攝影機效果最佳。 |
+| 🌐 瀏覽器 | 建議使用 Chrome 或 Edge。桌機 + 網路攝影機可使用手勢控制；手機支援觸控演奏。 |
 
 ---
 
@@ -36,9 +36,10 @@
 ## 功能
 
 - **手勢辨識**：MediaPipe Hands 辨識 8 種手勢（POINTING、OPEN_PALM、CLOSED_FIST、THUMB_UP、VICTORY…），在瀏覽器本機以 WebAssembly 執行，影像不離開裝置
-- **圓形音階 UI**：食指滑過不同扇形區域即時觸發音符，支援 Piano / Acoustic Guitar / Synth / Drum 四種音色
+- **圓形音階 UI**：手勢模式下以食指指向扇形區域觸發音符；手機可直接觸控音環演奏。支援 Piano / Acoustic Guitar / Synth / Drum 四種音色
 - **手勢指令**：FIST 左右揮切換樂器；OPEN_PALM 轉腕調音量（palm rotation delta knob）；THUMB_UP / VICTORY / OPEN_PALM 觸發離散指令
 - **自訂音階環**：拖拉介面自由排列 8 個音符格子，可儲存 / 載入多組排列
+- **響應式設計（RWD）**：手機完整可用——垂直堆疊版面、音環觸控事件、音符串流 / 手勢紀錄 Tab 切換
 - **Google OAuth + JWT**：支援 Google 一鍵登入與帳密註冊
 - **個人統計**：今日音符、累計音符、最常樂器、最常音符、最常手勢
 - **即時在線**：STOMP WebSocket 顯示目前在線玩家
@@ -203,3 +204,4 @@ Publish:   /app/presence/leave
 - **Google OAuth FedCM**：使用 `renderButton` + 透明 overlay 解決 FedCM 在 HTTP 環境被封鎖的問題；私有 LAN IP 改用 `isLocalhost` 判斷隱藏按鈕
 - **JWT**：密鑰走 `${JWT_SECRET}` 環境變數注入，不寫死在設定檔
 - **音量控制**：手腕旋轉角度（palm rotation delta）累積控制，非 pinch，避免誤觸
+- **Canvas 尺寸**：閒置環與即時 overlay 都用 `getBoundingClientRect()` 取得 CSS 顯示尺寸，而非影片原始解析度，確保在任何 device pixel ratio 或鏡頭解析度下圓環不變形（解決高 DPI / iPhone 上橢圓問題）

@@ -17,7 +17,7 @@ Browser-side MediaPipe WASM (gesture recognition, runs on the user's device) →
 | 🎭 Demo account | `guest` / `guest123` (or register your own) |
 | ⏱️ First load | Hosted on Render's free tier — the server sleeps when idle, so the **first visit may take up to ~1 minute** to wake up. Subsequent loads are fast. |
 | 📷 Camera | Click **Start Camera** and allow webcam access — gesture recognition runs entirely in your browser (WebAssembly); the video never leaves your device. |
-| 🌐 Browser | Chrome or Edge recommended, desktop with a webcam. |
+| 🌐 Browser | Chrome or Edge recommended. Desktop with webcam for gesture control; mobile supported for touch-based note playing. |
 
 ---
 
@@ -36,9 +36,10 @@ Browser-side MediaPipe WASM (gesture recognition, runs on the user's device) →
 ## Features
 
 - **Gesture Recognition**: MediaPipe Hands detects 8 gestures (POINTING, OPEN_PALM, CLOSED_FIST, THUMB_UP, VICTORY…) running entirely in the browser via WebAssembly — the camera feed never leaves the device
-- **Circular Note Ring UI**: Point your index finger into different ring sectors to trigger notes. Supports Piano, Acoustic Guitar, Synth, and Drum
+- **Circular Note Ring UI**: Point your index finger into different ring sectors to trigger notes in gesture mode; tap the ring directly on mobile for touch-based playing. Supports Piano, Acoustic Guitar, Synth, and Drum
 - **Gesture Commands**: FIST + swipe left/right to cycle instruments; OPEN_PALM + wrist rotation to control volume (palm rotation delta knob); THUMB_UP / VICTORY trigger discrete commands
 - **Custom Note Layout**: Drag-and-drop editor to arrange 8 note slots freely, with save/load for multiple layouts
+- **Responsive Design**: Fully usable on mobile — vertical stacked layout, touch events on the note ring, tab switcher for note feed / gesture history
 - **Google OAuth + JWT**: Google one-click login and username/password registration
 - **Personal Stats**: Today's notes, total notes, top instrument, top note, top gesture
 - **Live Presence**: STOMP WebSocket shows who's currently online
@@ -203,3 +204,4 @@ The final solution uses the official MediaPipe JavaScript SDK (`@mediapipe/tasks
 - **Google OAuth FedCM**: Uses `renderButton` + transparent overlay to work around FedCM being blocked on HTTP; private LAN IPs use `isLocalhost` check to hide the Google button
 - **JWT**: Secret injected via `${JWT_SECRET}` environment variable, never hardcoded
 - **Volume control**: Wrist rotation angle (palm rotation delta accumulation) — not pinch — to avoid accidental triggers
+- **Canvas sizing**: Both idle ring and live overlay always read the canvas display dimensions via `getBoundingClientRect()` instead of video resolution, so the ring stays circular on any device pixel ratio or camera resolution (no stretch distortion on retina/high-DPI screens)
