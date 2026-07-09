@@ -87,20 +87,29 @@ function drawRing(ctx, W, H, highlightNote = null) {
     ctx.arc(cx, cy, ro, a1, a2)
     ctx.arc(cx, cy, ri, a2, a1, true)
     ctx.closePath()
-    ctx.fillStyle = isHit
-      ? 'rgba(52,211,153,0.55)'
-      : i % 2 === 0 ? 'rgba(200,230,255,0.28)' : 'rgba(0,10,40,0.45)'
+    if (isHit) {
+      ctx.fillStyle = 'rgba(52,211,153,0.65)'
+      ctx.shadowColor = 'rgba(52,211,153,0.9)'
+      ctx.shadowBlur = 18
+    } else {
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(212,175,55,0.18)' : 'rgba(10,4,0,0.6)'
+      ctx.shadowBlur = 0
+    }
     ctx.fill()
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)'
-    ctx.lineWidth = 1
+    ctx.shadowBlur = 0
+    ctx.strokeStyle = isHit ? 'rgba(52,211,153,0.9)' : 'rgba(212,175,55,0.45)'
+    ctx.lineWidth = isHit ? 2 : 1
     ctx.stroke()
   }
   for (const r of [ri, ro]) {
     ctx.beginPath()
     ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)'
+    ctx.strokeStyle = 'rgba(212,175,55,0.7)'
     ctx.lineWidth = 2
+    ctx.shadowColor = 'rgba(212,175,55,0.4)'
+    ctx.shadowBlur = 6
     ctx.stroke()
+    ctx.shadowBlur = 0
   }
   const labelR = (INNER + OUTER) / 2 * minDim
   const isDrum = dashboard.selectedInstrument === 'drum'
@@ -109,9 +118,10 @@ function drawRing(ctx, W, H, highlightNote = null) {
   ctx.textBaseline = 'middle'
   dashboard.activeNotes.forEach((note, i) => {
     const a = ((i + 0.5) / 8) * 2 * Math.PI - Math.PI / 2
-    ctx.fillStyle = note === highlightNote ? '#34d399' : 'white'
-    ctx.shadowColor = 'rgba(0,0,0,0.8)'
-    ctx.shadowBlur = 4
+    const isHit = note === highlightNote
+    ctx.fillStyle = isHit ? '#34d399' : 'rgba(212,175,55,0.95)'
+    ctx.shadowColor = isHit ? 'rgba(52,211,153,0.8)' : 'rgba(212,175,55,0.5)'
+    ctx.shadowBlur = isHit ? 10 : 4
     const label = isDrum ? (DRUM_RING[note] ?? note) : note
     ctx.fillText(label, cx + Math.cos(a) * labelR, cy + Math.sin(a) * labelR)
   })
@@ -284,6 +294,27 @@ function onCanvasMouseLeave() {
   if (status.value !== 'running' && hoverNote) { hoverNote = null; drawIdleRing(null) }
 }
 
+function onCanvasTouchStart(e) {
+  e.preventDefault()
+  const touch = e.touches[0]
+  const note = noteAtCanvasPos(touch)
+  fireNote(note)
+  if (status.value !== 'running' && note !== hoverNote) { hoverNote = note; drawIdleRing(note) }
+}
+
+function onCanvasTouchMove(e) {
+  e.preventDefault()
+  const touch = e.touches[0]
+  const note = noteAtCanvasPos(touch)
+  fireNote(note)
+  if (status.value !== 'running' && note !== hoverNote) { hoverNote = note; drawIdleRing(note) }
+}
+
+function onCanvasTouchEnd() {
+  hoverNote = null
+  if (status.value !== 'running') drawIdleRing(null)
+}
+
 // ─── Gesture detection loop ───────────────────────────────────────────────────
 
 function detectLoop() {
@@ -452,11 +483,20 @@ function stop() {
   nextTick(() => drawIdleRing())
 }
 
-onMounted(() => nextTick(() => drawIdleRing()))
+let resizeObserver = null
+onMounted(() => nextTick(() => {
+  drawIdleRing()
+  if (canvasRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+      if (status.value !== 'running') nextTick(() => drawIdleRing())
+    })
+    resizeObserver.observe(canvasRef.value)
+  }
+}))
 watch(status, v => { if (v !== 'running') nextTick(() => drawIdleRing()) })
 watch(() => dashboard.selectedInstrument, () => { if (status.value !== 'running') nextTick(() => drawIdleRing()) })
 watch(() => dashboard.activeNotes, () => { if (status.value !== 'running') nextTick(() => drawIdleRing()) }, { deep: true })
-onUnmounted(stop)
+onUnmounted(() => { stop(); resizeObserver?.disconnect() })
 defineExpose({ start, stop, status })
 </script>
 
@@ -476,7 +516,10 @@ defineExpose({ start, stop, status })
       @mousedown="onCanvasMouseDown"
       @mousemove="onCanvasMouseMove"
       @mouseup="onCanvasMouseUp"
-      @mouseleave="onCanvasMouseLeave"></canvas>
+      @mouseleave="onCanvasMouseLeave"
+      @touchstart.passive="onCanvasTouchStart"
+      @touchmove.passive="onCanvasTouchMove"
+      @touchend="onCanvasTouchEnd"></canvas>
 
     <!-- Detected note badge -->
     <div v-if="detectedNote"
