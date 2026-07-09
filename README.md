@@ -8,6 +8,19 @@ Browser-side MediaPipe WASM (gesture recognition, runs on the user's device) →
 
 ---
 
+## 🎹 Live Demo
+
+**Try it now:** [https://gesture-music-studio.onrender.com](https://gesture-music-studio.onrender.com)
+
+| | |
+|---|---|
+| 🎭 Demo account | `guest` / `guest123` (or register your own) |
+| ⏱️ First load | Hosted on Render's free tier — the server sleeps when idle, so the **first visit may take up to ~1 minute** to wake up. Subsequent loads are fast. |
+| 📷 Camera | Click **Start Camera** and allow webcam access — gesture recognition runs entirely in your browser (WebAssembly); the video never leaves your device. |
+| 🌐 Browser | Chrome or Edge recommended, desktop with a webcam. |
+
+---
+
 <p align="center">
   <img src="./docs/images/screenshot-login.png" width="370">
   <img src="./docs/images/screenshot-dashboard.png" width="370">

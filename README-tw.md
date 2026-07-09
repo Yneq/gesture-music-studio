@@ -8,6 +8,19 @@
 
 ---
 
+## 🎹 線上 Demo
+
+**立即試玩：** [https://gesture-music-studio.onrender.com](https://gesture-music-studio.onrender.com)
+
+| | |
+|---|---|
+| 🎭 測試帳號 | `guest` / `guest123`（或自行註冊） |
+| ⏱️ 首次載入 | 部署於 Render 免費方案，閒置時伺服器會休眠，**首次進入可能需要約 1 分鐘喚醒**，之後載入正常。 |
+| 📷 攝影機 | 點擊「手勢」啟動攝影機並允許存取，手勢辨識完全在瀏覽器本機執行（WebAssembly），影像不會離開裝置。 |
+| 🌐 瀏覽器 | 建議使用 Chrome 或 Edge，桌機 + 網路攝影機效果最佳。 |
+
+---
+
 <p align="center">
   <img src="./docs/images/screenshot-login.png" width="370">
   <img src="./docs/images/screenshot-dashboard.png" width="370">
