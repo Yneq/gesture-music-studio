@@ -1,0 +1,20 @@
+# Render Blueprint:在 Render dashboard 選 New -> Blueprint,
+# 指向這個 repo,會自動照這份設定建立服務。
+# (也可以不用 blueprint,手動 New -> Web Service 一樣能設)
+services:
+  - type: web
+    name: ai-gesture-music-studio
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: DB_URL
+        sync: false   # 部署時手動填 Neon 的 JDBC 連線字串
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true   # Render 自動產生一組隨機值,不用自己想
+      - key: GOOGLE_CLIENT_ID
+        sync: false
