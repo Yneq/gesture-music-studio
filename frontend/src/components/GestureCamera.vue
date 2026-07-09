@@ -132,7 +132,11 @@ function drawOverlay(landmarks) {
   const canvas = canvasRef.value
   const video = videoRef.value
   if (!canvas || !video) return
-  const W = video.videoWidth, H = video.videoHeight
+  if (!video.videoWidth || !video.videoHeight) return
+  // Use display dimensions so the ring is never distorted regardless of video resolution
+  const rect = canvas.getBoundingClientRect()
+  const W = Math.round(rect.width) || canvas.offsetWidth
+  const H = Math.round(rect.height) || canvas.offsetHeight
   if (!W || !H) return
   canvas.width = W
   canvas.height = H
@@ -141,6 +145,7 @@ function drawOverlay(landmarks) {
   drawRing(ctx, W, H, null)
 
   if (landmarks) {
+    // Landmarks are normalized [0,1] so multiply by display size directly
     const lx = i => (1 - landmarks[i].x) * W
     const ly = i => landmarks[i].y * H
     const CONNECTIONS = [
@@ -234,8 +239,9 @@ function drawVolumeFeedback(ctx, lm, W, H, vol, angleDeg) {
 function drawIdleRing(highlightNote = null) {
   const canvas = canvasRef.value
   if (!canvas) return
-  const W = canvas.offsetWidth || canvas.clientWidth
-  const H = canvas.offsetHeight || canvas.clientHeight
+  const rect = canvas.getBoundingClientRect()
+  const W = Math.round(rect.width) || canvas.offsetWidth
+  const H = Math.round(rect.height) || canvas.offsetHeight
   if (!W || !H) return
   canvas.width = W
   canvas.height = H
@@ -517,8 +523,8 @@ defineExpose({ start, stop, status })
       @mousemove="onCanvasMouseMove"
       @mouseup="onCanvasMouseUp"
       @mouseleave="onCanvasMouseLeave"
-      @touchstart.passive="onCanvasTouchStart"
-      @touchmove.passive="onCanvasTouchMove"
+      @touchstart="onCanvasTouchStart"
+      @touchmove="onCanvasTouchMove"
       @touchend="onCanvasTouchEnd"></canvas>
 
     <!-- Detected note badge -->

@@ -326,7 +326,7 @@ const LABEL_STYLE = 'color:rgba(212,175,55,0.5);font-size:0.65rem;letter-spacing
 
       <!-- Left panel -->
       <div :style="isMobile ? {} : { width: leftPct + '%' }"
-        class="w-full md:w-auto md:shrink-0 md:min-h-0 md:overflow-hidden rounded-2xl p-4 flex flex-col gap-3"
+        class="w-full md:w-auto md:shrink-0 md:min-h-0 md:overflow-y-auto rounded-2xl p-4 flex flex-col gap-3"
         style="background:rgba(10,4,0,0.68);backdrop-filter:blur(20px);border:1px solid rgba(212,175,55,0.22);">
 
         <!-- Current note badge -->
@@ -349,8 +349,8 @@ const LABEL_STYLE = 'color:rgba(212,175,55,0.5);font-size:0.65rem;letter-spacing
         </div>
 
         <!-- Camera -->
-        <div class="w-full aspect-[4/3] relative shrink-0 rounded-xl overflow-hidden"
-          style="border:1px solid rgba(212,175,55,0.18)">
+        <div class="w-full aspect-[4/3] relative shrink-0 rounded-xl overflow-hidden mx-auto"
+          style="border:1px solid rgba(212,175,55,0.18);max-height:50vh;max-width:calc(50vh * 4 / 3)">
           <GestureCamera ref="cameraRef" class="absolute inset-0"
             @status="v => cameraStatus = v"
             @gesture="onGestureDetected" />
