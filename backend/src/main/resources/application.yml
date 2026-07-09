@@ -1,12 +1,12 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 spring:
   application:
     name: gesture-music-studio
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/${DB_NAME:gesture_music_studio}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/gesture_music_studio}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
